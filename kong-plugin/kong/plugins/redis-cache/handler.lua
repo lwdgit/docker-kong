@@ -9,6 +9,29 @@ local CacheHandler = BasePlugin:extend()
 local cjson_decode = cjson.decode
 local cjson_encode = cjson.encode
 
+local headersMap = {
+  ["server"] = "Server",
+  ["date"] = "Date",
+  ["content-encoding"] = "Content-Encoding",
+  ["location"] = "Location",
+  ["refresh"] = "Refresh",
+  ["last-modified"] = "Last-Modified",
+  ["content-range"] = "Content-Range",
+  ["accept-ranges"] = "Accept-Ranges",
+  ["www-authenticate"] = "WWW-Authenticate",
+  ["expires"] = "Expires",
+  ["e-tag"] = "E-Tag",
+  ["etag"] = "ETag",
+  ["content-length"] = "Content-Length",
+  ["content-type"] = "Content-Type",
+  ["cache-control"] = "Cache-Control"
+}
+
+local LOG_COLOR = {
+  [ngx.ERR] = '\27[31m',
+  [ngx.NOTICE] = '\27[33m'
+}
+
 local req_get_method = ngx.req.get_method
 local lock_dict = ngx.shared['kong'] and 'kong' or 'kong_locks' -- lua 三元表达式写法 ngx.shared['kong_cache'] ? 'kong_cache' : 'cache_locks'
 
@@ -24,8 +47,8 @@ end
 local function log(logType, ...)
   local info = debug.getinfo(3, "Sl")
   local lineinfo = info.short_src .. ":" .. info.currentline
-  local logstr = '[REDIS CACHE (' .. lineinfo .. ')]:'
-  for _, v in ipairs({...}) do
+  local logstr = '[REDIS CACHE => ' .. lineinfo .. ':'
+  for _, v in pairs({...}) do
     if (v == nil) then
       logstr = logstr .. ' nil'
     elseif type(v) == "table" then
@@ -35,7 +58,7 @@ local function log(logType, ...)
     end
   end
 
-  ngx.log(logType, logstr)
+  ngx.log(logType, string.format("%s %s %s", LOG_COLOR[logType], logstr, "\27[0m"))
 end
 
 local function error(...)
@@ -55,7 +78,7 @@ local function cacheable_request(method, uri, conf)
     return true
   end
   
-  for _,v in ipairs(conf.uris) do
+  for _, v in ipairs(conf.uris) do
     if string.match(uri, "^"..v.."$") then
       return true
     end
@@ -67,12 +90,12 @@ end
 local function get_cache_key(uri, headers, query_params, conf)
   local cache_key = uri
   
-  table.sort(query_params)
-  for _,param in ipairs(conf.vary_by_query) do
+  -- table.sort(query_params)
+  for _, param in ipairs(conf.vary_by_query) do
     local query_value = query_params[param]
     if query_value then
       if type(query_value) == "table" then
-        table.sort(query_value)
+        -- table.sort(query_value)
         query_value = table.concat(query_value, ",")
       end
       notice("varying cache key by query string ("..param..":"..query_value..")")
@@ -80,12 +103,12 @@ local function get_cache_key(uri, headers, query_params, conf)
     end
   end
 
-  table.sort(headers)
-  for _,header in ipairs(conf.vary_by_headers) do
+  -- table.sort(headers)
+  for _, header in ipairs(conf.vary_by_headers) do
     local header_value = headers[header]
     if header_value then
       if type(header_value) == "table" then
-        table.sort(header_value)
+        -- table.sort(header_value)
         header_value = table.concat(header_value, ",")
       end
       notice("varying cache key by matched header ("..header..":"..header_value..")")
@@ -93,7 +116,7 @@ local function get_cache_key(uri, headers, query_params, conf)
     end
   end
 
-  for _,cookie_name in ipairs(conf.vary_by_cookies) do
+  for _, cookie_name in ipairs(conf.vary_by_cookies) do
     local cookie_value = ngx.var['cookie_'..cookie_name]
     if cookie_value then
       notice("varying cache key by matched cookie ("..cookie_name..":"..cookie_value..")")
@@ -187,6 +210,7 @@ function set_response(status, content)
   ngx.header['X-Via'] = 'rcc'
   ngx.print(content)
   -- return responses.send_HTTP_OK()
+  notice('response status', status)
   return ngx.exit(status)
 end
 
@@ -206,7 +230,7 @@ function CacheHandler:access(conf)
   if updated_at ~= ngx.null and updated_at ~= nil and (ngx.now() - updated_at < conf.refresh_time) then
     local headers = json_decode(header)
 
-    for k,v in pairs(headers) do
+    for k, v in pairs(headers) do
       ngx.header[k] = v
     end
 
@@ -260,25 +284,25 @@ function CacheHandler:header_filter(conf)
   if not ctx then
     return
   else
-
-
     if conf.use_etag then
-      ngx.header['ETag'] = ngx.header['ETag'] or ngx.md5(ctx.cache_key .. ngx.now())
+      ngx.header['ETag'] = ngx.md5(ctx.cache_key .. ngx.now())
       ngx.header['Last-Modified'] = ngx.http_time(ngx.now())
       ngx.header['Expires'] = ngx.http_time(ngx.now() + conf.refresh_time)
-      -- ngx.header['ETag'] = headers['Etag']
-      -- ngx.header['Last-Modified'] = headers['Last-Modified']
-      -- ngx.header['Expires'] = headers['Expires']
     end
+
     local headers = ngx.resp.get_headers()
-    for k, v in pairs(headers) do
-      notice(k, v)
-    end
-    headers['date'] = nil
+    -- 去除两个不能缓存的变量
     headers['connection'] = nil
+    headers['Date'] = nil
+    -- 将被 resty 转换过的 key 转换回来， 参考 https://github.com/openresty/lua-nginx-module/blob/master/src/ngx_http_lua_headers_out.c
+    for k, v in pairs(headers) do
+      if headersMap[k] then
+        headers[headersMap[k]] = v
+        headers[k] = nil
+      end
+    end
     ctx.headers = json_encode(headers)
     ngx.header['X-Via'] = ctx.header_flag -- 通过x-via标志缓存插件是否生效
-    notice(ngx.header, headers)
   end
 end
 
