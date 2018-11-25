@@ -294,7 +294,7 @@ function CacheHandler:header_filter(conf)
     -- 去除不能缓存的变量
     headers['connection'] = nil
     headers['Date'] = nil
-    headers['status'] = nil
+
     -- -- 将被 resty 转换过的 key 转换回来， 参考 https://github.com/openresty/lua-nginx-module/blob/master/src/ngx_http_lua_headers_out.c
     -- for k, v in pairs(headers) do
     --   if headersMap[k] then
