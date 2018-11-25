@@ -1,15 +1,50 @@
 local BasePlugin = require "kong.plugins.base_plugin"
-local CacheHandler = BasePlugin:extend()
 local responses = require "kong.tools.responses"
-local req_get_method = ngx.req.get_method
-
+local cjson = require 'cjson'
 local redis = require "resty.redis"
 local resty_lock = require "resty.lock"
 
-local cjson_decode = require("cjson").decode
-local cjson_encode = require("cjson").encode
+local CacheHandler = BasePlugin:extend()
 
+local cjson_decode = cjson.decode
+local cjson_encode = cjson.encode
+
+local req_get_method = ngx.req.get_method
 local lock_dict = ngx.shared['kong'] and 'kong' or 'kong_locks' -- lua 三元表达式写法 ngx.shared['kong_cache'] ? 'kong_cache' : 'cache_locks'
+
+local function json_decode(json)
+  if json then
+    local status, res = pcall(cjson_decode, json)
+    if status then
+      return res
+    end
+  end
+end
+
+local function log(logType, ...)
+  local info = debug.getinfo(3, "Sl")
+  local lineinfo = info.short_src .. ":" .. info.currentline
+  local logstr = '[REDIS CACHE (' .. lineinfo .. ')]:'
+  for _, v in ipairs({...}) do
+    if (v == nil) then
+      logstr = logstr .. ' nil'
+    elseif type(v) == "table" then
+      logstr = logstr .. ' ' .. cjson_encode(v)
+    else
+      logstr = logstr .. ' ' .. tostring(v)
+    end
+  end
+
+  ngx.log(logType, logstr)
+end
+
+local function error(...)
+  log(ngx.ERR, ...)
+end
+
+local function notice(...)
+  log(ngx.NOTICE, ...)
+end
 
 local function cacheable_request(method, uri, conf)
   if method ~= "GET" then
@@ -33,14 +68,14 @@ local function get_cache_key(uri, headers, query_params, conf)
   local cache_key = uri
   
   table.sort(query_params)
-  for _,param in ipairs(conf.vary_by_query_string_parameters) do
+  for _,param in ipairs(conf.vary_by_query) do
     local query_value = query_params[param]
     if query_value then
       if type(query_value) == "table" then
         table.sort(query_value)
         query_value = table.concat(query_value, ",")
       end
-      ngx.log(ngx.NOTICE, "varying cache key by query string ("..param..":"..query_value..")")
+      notice("varying cache key by query string ("..param..":"..query_value..")")
       cache_key = cache_key..":"..param.."="..query_value
     end
   end
@@ -53,7 +88,7 @@ local function get_cache_key(uri, headers, query_params, conf)
         table.sort(header_value)
         header_value = table.concat(header_value, ",")
       end
-      ngx.log(ngx.NOTICE, "varying cache key by matched header ("..header..":"..header_value..")")
+      notice("varying cache key by matched header ("..header..":"..header_value..")")
       cache_key = cache_key..":"..header.."="..header_value
     end
   end
@@ -61,21 +96,12 @@ local function get_cache_key(uri, headers, query_params, conf)
   for _,cookie_name in ipairs(conf.vary_by_cookies) do
     local cookie_value = ngx.var['cookie_'..cookie_name]
     if cookie_value then
-      ngx.log(ngx.NOTICE, "varying cache key by matched cookie ("..cookie_name..":"..cookie_value..")")
+      notice("varying cache key by matched cookie ("..cookie_name..":"..cookie_value..")")
       cache_key = cache_key..":"..cookie_name.."="..cookie_value
     end
   end
   
   return conf.cache_prefix.."::"..cache_key
-end
-
-local function json_decode(json)
-  if json then
-    local status, res = pcall(cjson_decode, json)
-    if status then
-      return res
-    end
-  end
 end
 
 local function json_encode(table)
@@ -114,25 +140,25 @@ local function connect_to_redis(conf)
   return red
 end
 
-local function red_set(premature, key, header, body, conf, lock_instance)
+local function red_set(premature, ctx, conf)
   local red, err = connect_to_redis(conf)
   if err then
-      ngx.log(ngx.ERR, "failed to connect to Redis: ", err)
+    error("failed to connect to Redis: ", err)
   end
 
   red:init_pipeline()
-  red:hmset(key, 'header', header, 'body', body, 'create_at', os.time())
+  red:hmset(ctx.cache_key, 'header', ctx.headers, 'body', ctx.res_body, 'updated_at', ctx.updated_at)
   if conf.expire_time then
-    red:expire(key, conf.expire_time)
+    red:expire(ctx.cache_key, conf.expire_time)
   end
   local results, err = red:commit_pipeline()
   if err then
-    ngx.log(ngx.ERR, "failed to commit the pipelined requests: ", err)
+    error("failed to commit the pipelined requests: ", err)
   end
-  lock_instance:unlock()
+  ctx.lock_instance:unlock()
   local ok, err = red:set_keepalive(10000, 100)
   if not ok then
-    ngx_log(ngx.ERR, "failed to set Redis keepalive: ", err)
+    error("failed to set Redis keepalive: ", err)
     return nil, err
   end
 end
@@ -140,14 +166,14 @@ end
 local function red_get(key, conf)
   local red, err = connect_to_redis(conf)
   if err then
-    ngx.log(ngx.ERR, "failed to connect to Redis: ", err)
+    error("failed to connect to Redis: ", err)
     return
   end
 
-  local cached_val, err = red:hmget(key, 'header', 'body', 'create_at')
+  local cached_val, err = red:hmget(key, 'header', 'body', 'updated_at')
   
   if not cached_val then
-    ngx.log(ngx.ERR, "failed to get redis cache: ", key, " => ", err)
+    error("failed to get redis cache: ", key, " => ", err)
     return
   end
   return unpack(cached_val)
@@ -157,10 +183,11 @@ function CacheHandler:new()
   CacheHandler.super.new(self, "response-cache")
 end
 
-function set_response(content)
+function set_response(status, content)
   ngx.header['X-Via'] = 'rcc'
   ngx.print(content)
-  return responses.send_HTTP_OK()
+  -- return responses.send_HTTP_OK()
+  return ngx.exit(status)
 end
 
 function CacheHandler:access(conf)
@@ -168,19 +195,28 @@ function CacheHandler:access(conf)
   
   local uri = ngx.var.uri
   if not cacheable_request(req_get_method(), uri, conf) then
-    ngx.log(ngx.NOTICE, "not cacheable")
+    notice("not cacheable")
     return
   end
   
-  local cache_key = get_cache_key(uri, ngx.req.get_headers(), ngx.req.get_uri_args(), conf)
+  local req_headers = ngx.req.get_headers()
+  local cache_key = get_cache_key(uri, req_headers, ngx.req.get_uri_args(), conf)
 
-  local header, body, create_at = red_get(cache_key, conf)
-  if create_at ~= ngx.null and create_at ~= nil and (os.time() - create_at < conf.refresh_time) then
-    local val = json_decode(header)
-    for k,v in pairs(val) do
+  local header, body, updated_at = red_get(cache_key, conf)
+  if updated_at ~= ngx.null and updated_at ~= nil and (ngx.now() - updated_at < conf.refresh_time) then
+    local headers = json_decode(header)
+
+    for k,v in pairs(headers) do
       ngx.header[k] = v
     end
-    set_response(body) -- 不需要 return
+
+    local ifNoneMatch = req_headers['If-None-Match']
+
+    if conf.use_etag and ifNoneMatch and ifNoneMatch == headers['ETag'] then
+      set_response(304) -- 不需要 return
+    else
+      set_response(200, body) -- 不需要 return
+    end
   end
 
   -- create lock
@@ -189,7 +225,7 @@ function CacheHandler:access(conf)
   })
 
   if err then
-    ngx.log(ngx.ERR, "failed to create lock: ", err)
+    error("failed to create lock: ", err)
   end
 
   local elapsed, err = lock_instance:lock(cache_key)
@@ -197,22 +233,23 @@ function CacheHandler:access(conf)
   if elapsed ~= 0 then -- elapsed 标志为0表示新建的lock
     local header, body = red_get(cache_key, conf)
     if header and header ~= ngx.null then
-      ngx.log(ngx.NOTICE, "cache hit")
+      notice("cache hit")
       local val = json_decode(header)
-      for k,v in pairs(val) do
+      for k, v in pairs(val) do
         ngx.header[k] = v;
       end
       lock_instance:unlock()
-      return set_response(body)
+      return set_response(200, body)
     end
     return
   end
 
-  ngx.log(ngx.NOTICE, "cache miss")
+  notice("cache miss")
   ngx.ctx.response_cache = {
     cache_key = cache_key,
     lock_instance = lock_instance,
-    header_flag = 'rcp'
+    header_flag = 'rcp',
+    updated_at = ngx.now()
   }
 end
 
@@ -222,9 +259,27 @@ function CacheHandler:header_filter(conf)
   local ctx = ngx.ctx.response_cache
   if not ctx then
     return
+  else
+
+
+    if conf.use_etag then
+      ngx.header['ETag'] = ngx.header['ETag'] or ngx.md5(ctx.cache_key .. ngx.now())
+      ngx.header['Last-Modified'] = ngx.http_time(ngx.now())
+      ngx.header['Expires'] = ngx.http_time(ngx.now() + conf.refresh_time)
+      -- ngx.header['ETag'] = headers['Etag']
+      -- ngx.header['Last-Modified'] = headers['Last-Modified']
+      -- ngx.header['Expires'] = headers['Expires']
+    end
+    local headers = ngx.resp.get_headers()
+    for k, v in pairs(headers) do
+      notice(k, v)
+    end
+    headers['date'] = nil
+    headers['connection'] = nil
+    ctx.headers = json_encode(headers)
+    ngx.header['X-Via'] = ctx.header_flag -- 通过x-via标志缓存插件是否生效
+    notice(ngx.header, headers)
   end
-  ctx.headers = ngx.resp.get_headers()
-  ngx.header['X-Via'] = ctx.header_flag -- 通过x-via标志缓存插件是否生效
 end
 
 function CacheHandler:body_filter(conf)
@@ -242,7 +297,7 @@ function CacheHandler:body_filter(conf)
   res_body = res_body .. (chunk or "")
   ctx.res_body = res_body
   if eof then
-    ngx.timer.at(0, red_set, ctx.cache_key, json_encode(ctx.headers), ctx.res_body, conf, ctx.lock_instance)
+    ngx.timer.at(0, red_set, ctx, conf)
   end
 end
 
