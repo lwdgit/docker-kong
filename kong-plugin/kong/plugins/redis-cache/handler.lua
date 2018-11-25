@@ -158,9 +158,9 @@ function CacheHandler:new()
 end
 
 function set_response(content)
-  ngx.header['X-Via'] = ' rcc'
-  ngx.say(content)
-  return ngx.exit(ngx.OK)
+  ngx.header['X-Via'] = 'rcc'
+  ngx.print(content)
+  return responses.send_HTTP_OK()
 end
 
 function CacheHandler:access(conf)
@@ -180,7 +180,7 @@ function CacheHandler:access(conf)
     for k,v in pairs(val) do
       ngx.header[k] = v
     end
-    return set_response(body)
+    ngx.ctx.cache_body = body
   end
 
   -- create lock
@@ -203,7 +203,7 @@ function CacheHandler:access(conf)
         ngx.header[k] = v;
       end
       lock_instance:unlock()
-      return set_response(body)
+      ngx.ctx.cache_body = body
     end
     return
   end
@@ -229,6 +229,10 @@ end
 
 function CacheHandler:body_filter(conf)
   CacheHandler.super.body_filter(self)
+
+  if ngx.ctx.cache_body then
+    return set_response(ngx.ctx.cache_body)
+  end
 
   local ctx = ngx.ctx.response_cache
   if not ctx or ngx.status ~= 200 then
