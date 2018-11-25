@@ -37,7 +37,7 @@ services:
       POSTGRES_PASSWORD: ${KONG_PG_PASSWORD:-kong}
       POSTGRES_USER: ${KONG_PG_USER:-kong}
     volumes:
-      - ./kong-database:/var/lib/postgresql/data
+      - ../kong-database:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "${KONG_PG_USER:-kong}"]
       interval: 30s
@@ -55,5 +55,5 @@ services:
     ports:
       - "1337:1337"
     volumes:
-      - ./kongadata:/app/kongadata
+      - ../kongadata:/app/kongadata
     restart: on-failure
