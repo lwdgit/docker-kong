@@ -9,7 +9,7 @@ local resty_lock = require "resty.lock"
 local cjson_decode = require("cjson").decode
 local cjson_encode = require("cjson").encode
 
-local lock_dict = ngx.shared['kong_cache'] and 'kong_cache' or 'cache_locks' -- lua 三元表达式写法 ngx.shared['kong_cache'] ? 'kong_cache' : 'cache_locks'
+local lock_dict = ngx.shared['kong'] and 'kong' or 'kong_locks' -- lua 三元表达式写法 ngx.shared['kong_cache'] ? 'kong_cache' : 'cache_locks'
 
 local function cacheable_request(method, uri, conf)
   if method ~= "GET" then
@@ -187,6 +187,10 @@ function CacheHandler:access(conf)
   local lock_instance, err = resty_lock:new(lock_dict, {
     timeout = lock_timeout
   })
+
+  if err then
+    ngx.log(ngx.ERR, "failed to create lock: ", err)
+  end
 
   local elapsed, err = lock_instance:lock(cache_key)
 
