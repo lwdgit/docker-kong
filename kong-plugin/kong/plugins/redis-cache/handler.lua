@@ -293,7 +293,7 @@ function CacheHandler:header_filter(conf)
     local headers = ngx.resp.get_headers()
     -- 去除不能缓存的变量
     headers['connection'] = nil
-    headers['Date'] = nil
+    headers['date'] = nil
 
     -- -- 将被 resty 转换过的 key 转换回来， 参考 https://github.com/openresty/lua-nginx-module/blob/master/src/ngx_http_lua_headers_out.c
     -- for k, v in pairs(headers) do
