@@ -291,16 +291,17 @@ function CacheHandler:header_filter(conf)
     end
 
     local headers = ngx.resp.get_headers()
-    -- 去除两个不能缓存的变量
+    -- 去除不能缓存的变量
     headers['connection'] = nil
     headers['Date'] = nil
-    -- 将被 resty 转换过的 key 转换回来， 参考 https://github.com/openresty/lua-nginx-module/blob/master/src/ngx_http_lua_headers_out.c
-    for k, v in pairs(headers) do
-      if headersMap[k] then
-        headers[headersMap[k]] = v
-        headers[k] = nil
-      end
-    end
+    headers['status'] = nil
+    -- -- 将被 resty 转换过的 key 转换回来， 参考 https://github.com/openresty/lua-nginx-module/blob/master/src/ngx_http_lua_headers_out.c
+    -- for k, v in pairs(headers) do
+    --   if headersMap[k] then
+    --     headers[headersMap[k]] = v
+    --     headers[k] = nil
+    --   end
+    -- end
     ctx.headers = json_encode(headers)
     ngx.header['X-Via'] = ctx.header_flag -- 通过x-via标志缓存插件是否生效
   end
