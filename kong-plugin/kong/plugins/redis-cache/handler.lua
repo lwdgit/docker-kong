@@ -180,7 +180,7 @@ function CacheHandler:access(conf)
     for k,v in pairs(val) do
       ngx.header[k] = v
     end
-    ngx.ctx.cache_body = body
+    return set_response(body)
   end
 
   -- create lock
@@ -203,7 +203,7 @@ function CacheHandler:access(conf)
         ngx.header[k] = v;
       end
       lock_instance:unlock()
-      ngx.ctx.cache_body = body
+      return set_response(body)
     end
     return
   end
@@ -229,10 +229,6 @@ end
 
 function CacheHandler:body_filter(conf)
   CacheHandler.super.body_filter(self)
-
-  if ngx.ctx.cache_body then
-    return set_response(ngx.ctx.cache_body)
-  end
 
   local ctx = ngx.ctx.response_cache
   if not ctx or ngx.status ~= 200 then
