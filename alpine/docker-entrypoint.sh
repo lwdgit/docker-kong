@@ -15,5 +15,5 @@ if [[ "$1" == "kong" ]]; then
       -c nginx.conf
   fi
 fi
-
+export LUA_PATH="$LUA_PATH;/kong-plugin/?.lua;/kong-plugin/?/init.lua;;"
 exec "$@"
