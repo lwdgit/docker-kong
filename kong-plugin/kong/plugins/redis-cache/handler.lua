@@ -16,11 +16,11 @@ local function cacheable_request(method, uri, conf)
     return false
   end
   
-  if conf.cache_policy == nil or conf.cache_policy.uris == nil then
+  if conf.uris == nil then
     return true
   end
   
-  for _,v in ipairs(conf.cache_policy.uris) do
+  for _,v in ipairs(conf.uris) do
     if string.match(uri, "^"..v.."$") then
       return true
     end
@@ -33,7 +33,7 @@ local function get_cache_key(uri, headers, query_params, conf)
   local cache_key = uri
   
   table.sort(query_params)
-  for _,param in ipairs(conf.cache_policy.vary_by_query_string_parameters) do
+  for _,param in ipairs(conf.vary_by_query_string_parameters) do
     local query_value = query_params[param]
     if query_value then
       if type(query_value) == "table" then
@@ -46,7 +46,7 @@ local function get_cache_key(uri, headers, query_params, conf)
   end
 
   table.sort(headers)
-  for _,header in ipairs(conf.cache_policy.vary_by_headers) do
+  for _,header in ipairs(conf.vary_by_headers) do
     local header_value = headers[header]
     if header_value then
       if type(header_value) == "table" then
@@ -58,7 +58,7 @@ local function get_cache_key(uri, headers, query_params, conf)
     end
   end
 
-  for _,cookie_name in ipairs(conf.cache_policy.vary_by_cookies) do
+  for _,cookie_name in ipairs(conf.vary_by_cookies) do
     local cookie_value = ngx.var['cookie_'..cookie_name]
     if cookie_value then
       ngx.log(ngx.NOTICE, "varying cache key by matched cookie ("..cookie_name..":"..cookie_value..")")
@@ -66,7 +66,7 @@ local function get_cache_key(uri, headers, query_params, conf)
     end
   end
   
-  return conf.cache_policy.cache_prefix.."::"..cache_key
+  return conf.cache_prefix.."::"..cache_key
 end
 
 local function json_decode(json)
@@ -122,8 +122,8 @@ local function red_set(premature, key, header, body, conf, lock_instance)
 
   red:init_pipeline()
   red:hmset(key, 'header', header, 'body', body, 'create_at', os.time())
-  if conf.cache_policy.expire_time then
-    red:expire(key, conf.cache_policy.expire_time)
+  if conf.expire_time then
+    red:expire(key, conf.expire_time)
   end
   local results, err = red:commit_pipeline()
   if err then
@@ -175,7 +175,7 @@ function CacheHandler:access(conf)
   local cache_key = get_cache_key(uri, ngx.req.get_headers(), ngx.req.get_uri_args(), conf)
 
   local header, body, create_at = red_get(cache_key, conf)
-  if create_at ~= ngx.null and create_at ~= nil and (os.time() - create_at < conf.cache_policy.refresh_time) then
+  if create_at ~= ngx.null and create_at ~= nil and (os.time() - create_at < conf.refresh_time) then
     local val = json_decode(header)
     for k,v in pairs(val) do
       ngx.header[k] = v
