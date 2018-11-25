@@ -2,7 +2,6 @@ version: '2.1'
 services:
   kong:
     image: "${KONG_DOCKER_TAG:-kong:latest}"
-    #build: ../alpine
     command: kong start --run-migrations
     depends_on:
       db:
@@ -37,6 +36,8 @@ services:
       POSTGRES_DB: ${KONG_PG_DATABASE:-kong}
       POSTGRES_PASSWORD: ${KONG_PG_PASSWORD:-kong}
       POSTGRES_USER: ${KONG_PG_USER:-kong}
+    volumes:
+      - ./kong-database:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "${KONG_PG_USER:-kong}"]
       interval: 30s
@@ -45,3 +46,14 @@ services:
     restart: on-failure
     stdin_open: true
     tty: true
+  konga:
+    build: ../konga
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      - kong
+    ports:
+      - "1337:1337"
+    volumes:
+      - ./kongadata:/app/kongadata
+    restart: on-failure
