@@ -180,7 +180,7 @@ function CacheHandler:access(conf)
     for k,v in pairs(val) do
       ngx.header[k] = v
     end
-    return set_response(body)
+    set_response(body) -- 不需要 return
   end
 
   -- create lock
