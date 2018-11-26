@@ -91,7 +91,7 @@ local function get_cache_key(uri, headers, query_params, conf)
   local cache_key = uri
   
   -- table.sort(query_params)
-  for _, param in ipairs(conf.vary_by_query) do
+  for _, param in ipairs(conf.cache_policy.vary_by_query) do
     local query_value = query_params[param]
     if query_value then
       if type(query_value) == "table" then
@@ -104,7 +104,7 @@ local function get_cache_key(uri, headers, query_params, conf)
   end
 
   -- table.sort(headers)
-  for _, header in ipairs(conf.vary_by_headers) do
+  for _, header in ipairs(conf.cache_policy.vary_by_headers) do
     local header_value = headers[header]
     if header_value then
       if type(header_value) == "table" then
@@ -116,7 +116,7 @@ local function get_cache_key(uri, headers, query_params, conf)
     end
   end
 
-  for _, cookie_name in ipairs(conf.vary_by_cookies) do
+  for _, cookie_name in ipairs(conf.cache_policy.vary_by_cookies) do
     local cookie_value = ngx.var['cookie_'..cookie_name]
     if cookie_value then
       notice("varying cache key by matched cookie ("..cookie_name..":"..cookie_value..")")
@@ -124,7 +124,7 @@ local function get_cache_key(uri, headers, query_params, conf)
     end
   end
   
-  return conf.cache_prefix.."::"..cache_key
+  return conf.cache_policy.cache_prefix.."::"..cache_key
 end
 
 local function json_encode(table)
@@ -139,22 +139,22 @@ end
 local function connect_to_redis(conf)
   local red = redis:new()
   
-  red:set_timeout(conf.redis_timeout)
+  red:set_timeout(conf.redis_config.redis_timeout)
   
-  local ok, err = red:connect(conf.redis_host, conf.redis_port)
+  local ok, err = red:connect(conf.redis_config.redis_host, conf.redis_config.redis_port)
   if err then
     return nil, err
   end
 
-  if conf.redis_password and conf.redis_password ~= "" then
-    local ok, err = red:auth(conf.redis_password)
+  if conf.redis_config.redis_password and conf.redis_config.redis_password ~= "" then
+    local ok, err = red:auth(conf.redis_config.redis_password)
     if err then
       return nil, err
     end
   end
 
-  if conf.redis_db ~= 0 then
-    local ok, err = red:select(conf.redis_db)
+  if conf.redis_config.redis_db ~= 0 then
+    local ok, err = red:select(conf.redis_config.redis_db)
     if err then
       return nil, err
     end
@@ -287,8 +287,10 @@ function CacheHandler:header_filter(conf)
     if conf.use_etag then
       ngx.header['ETag'] = ngx.md5(ctx.cache_key .. ngx.now())
       ngx.header['Last-Modified'] = ngx.http_time(ngx.now())
-      ngx.header['Expires'] = ngx.http_time(ngx.now() + conf.refresh_time)
     end
+
+    ngx.header['Expires'] = ngx.http_time(ngx.now() + conf.refresh_time)
+    ngx.header['Cache-Control'] = 'max-age=' .. conf.refresh_time .. ', no-transform, public'
 
     local headers = ngx.resp.get_headers()
     -- 去除不能缓存的变量
