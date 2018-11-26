@@ -26,7 +26,6 @@ return {
       }
     },
     use_etag = { type = "boolean", default = false },
-    user_cache = { type = "boolean", default = true },
     refresh_time = { type = "number", default = 3600 }, -- 内容更新时间 120s
     expire_time = { type = "number", default = 7200 },  -- 缓存失效时间，1小时
     lock_timeout = { type = "number", default = 3 } -- 竞争锁失效时长，用于避免缓存风暴问题，视接口自身响应速度而定，一般为接口平均响应速度的2-3倍
