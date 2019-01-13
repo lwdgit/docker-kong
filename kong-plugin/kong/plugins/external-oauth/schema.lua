@@ -14,12 +14,12 @@ end
 
 return {
   fields = {
-    authorize_url = {type = "url", required = true, func = validate_url},
-    token_url = {type = "url", required = true, func = validate_url},
-    user_url  = {type = "url", required = true, func = validate_url},
+    authorize_url = {type = "url", required = true, func = validate_url, default = "https://github.com/login/oauth/authorize"},
+    token_url = {type = "url", required = true, func = validate_url, default = "https://github.com/login/oauth/access_token"},
+    user_url  = {type = "url", required = true, func = validate_url, default = "https://api.github.com/user"},
     client_id = {type = "string", required = true},
     client_secret = {type = "string", required = true},
-    scope = {type = "string", default = ""},
+    scope = {type = "string", default = "user:email"},
     user_keys = {type = "array", default = {"username", "email"}},
     user_info_periodic_check = {type = "number", required = true, default = 60},
     hosted_domain = {type = "string", default = ""},
