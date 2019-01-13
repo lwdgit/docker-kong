@@ -1,14 +1,27 @@
 version: '2.1'
 services:
-  kong:
-    image: "${KONG_DOCKER_TAG:-kong:latest}"
-    command: kong start --run-migrations
+  kong-migrations:
+    # image: "${KONG_DOCKER_TAG:-kong:latest}"
+    build: ../alpine
+    command: kong migrations bootstrap
     depends_on:
       db:
         condition: service_healthy
-    volumes:
-      - ../alpine/docker-entrypoint.sh:/docker-entrypoint.sh
-      - ../kong-plugin/:/kong-plugin/
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_DATABASE: ${KONG_PG_DATABASE:-kong}
+      KONG_PG_HOST: db
+      KONG_PG_PASSWORD: ${KONG_PG_PASSWORD:-kong}
+      KONG_PG_USER: ${KONG_PG_USER:-kong}
+    links:
+      - db:db
+
+  kong:
+    # image: "${KONG_DOCKER_TAG:-kong:latest}"
+    build: ../alpine
+    depends_on:
+      db:
+        condition: service_healthy
     environment:
       KONG_ADMIN_ACCESS_LOG: /dev/stdout
       KONG_ADMIN_ERROR_LOG: /dev/stderr
@@ -21,23 +34,25 @@ services:
       KONG_PG_USER: ${KONG_PG_USER:-kong}
       KONG_PROXY_ACCESS_LOG: /dev/stdout
       KONG_PROXY_ERROR_LOG: /dev/stderr
-      KONG_CUSTOM_PLUGINS: myplugin,redis-cache
     links:
       - db:db
     ports:
-      - "80:8000/tcp"
+      - "8000:8000/tcp"
       - "8001:8001/tcp"
-      - "443:8443/tcp"
+      - "8443:8443/tcp"
       - "8444:8444/tcp"
     restart: on-failure
+    volumes:
+      - ../alpine/docker-entrypoint.sh:/docker-entrypoint.sh
+      - ../kong-plugin/:/kong-plugin/
+    env_file:
+      - plugins.env
   db:
     image: postgres:9.5
     environment:
       POSTGRES_DB: ${KONG_PG_DATABASE:-kong}
       POSTGRES_PASSWORD: ${KONG_PG_PASSWORD:-kong}
       POSTGRES_USER: ${KONG_PG_USER:-kong}
-    volumes:
-      - ../kong-database:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "${KONG_PG_USER:-kong}"]
       interval: 30s
@@ -46,8 +61,19 @@ services:
     restart: on-failure
     stdin_open: true
     tty: true
+    volumes:
+      - ../kong-database:/var/lib/postgresql/data
+
+  # kong-dasboard:
+  #   image: pgbi/kong-dashboard
+  #   command: start --kong-url http://kong:8001 --port 1337
+  #   depends_on:
+  #     - kong
+  #   ports:
+  #     - "1337:1337"
+
   konga:
-    build: ../konga
+    image: pantsel/konga:next
     environment:
       - NODE_ENV=production
     depends_on:

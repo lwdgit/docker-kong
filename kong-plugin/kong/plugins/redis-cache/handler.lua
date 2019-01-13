@@ -1,5 +1,4 @@
 local BasePlugin = require "kong.plugins.base_plugin"
-local responses = require "kong.tools.responses"
 local cjson = require 'cjson'
 local redis = require "resty.redis"
 local resty_lock = require "resty.lock"
@@ -9,23 +8,23 @@ local CacheHandler = BasePlugin:extend()
 local cjson_decode = cjson.decode
 local cjson_encode = cjson.encode
 
-local headersMap = {
-  ["server"] = "Server",
-  ["date"] = "Date",
-  ["content-encoding"] = "Content-Encoding",
-  ["location"] = "Location",
-  ["refresh"] = "Refresh",
-  ["last-modified"] = "Last-Modified",
-  ["content-range"] = "Content-Range",
-  ["accept-ranges"] = "Accept-Ranges",
-  ["www-authenticate"] = "WWW-Authenticate",
-  ["expires"] = "Expires",
-  ["e-tag"] = "E-Tag",
-  ["etag"] = "ETag",
-  ["content-length"] = "Content-Length",
-  ["content-type"] = "Content-Type",
-  ["cache-control"] = "Cache-Control"
-}
+-- local headersMap = {
+--   ["server"] = "Server",
+--   ["date"] = "Date",
+--   ["content-encoding"] = "Content-Encoding",
+--   ["location"] = "Location",
+--   ["refresh"] = "Refresh",
+--   ["last-modified"] = "Last-Modified",
+--   ["content-range"] = "Content-Range",
+--   ["accept-ranges"] = "Accept-Ranges",
+--   ["www-authenticate"] = "WWW-Authenticate",
+--   ["expires"] = "Expires",
+--   ["e-tag"] = "E-Tag",
+--   ["etag"] = "ETag",
+--   ["content-length"] = "Content-Length",
+--   ["content-type"] = "Content-Type",
+--   ["cache-control"] = "Cache-Control"
+-- }
 
 local LOG_COLOR = {
   [ngx.ERR] = '\27[31m',
@@ -296,6 +295,7 @@ function CacheHandler:header_filter(conf)
     -- 去除不能缓存的变量
     headers['connection'] = nil
     headers['date'] = nil
+    headers['content-length'] = nil
 
     -- -- 将被 resty 转换过的 key 转换回来， 参考 https://github.com/openresty/lua-nginx-module/blob/master/src/ngx_http_lua_headers_out.c
     -- for k, v in pairs(headers) do
