@@ -16,6 +16,6 @@ function change_line {
 
 plugins=$(ls kong-plugin/kong/plugins | sort -V | tr '\n' ',' | rev | cut -c 2- | rev)
 
-change_line "KONG_CUSTOM_PLUGINS=.*" "KONG_CUSTOM_PLUGINS=$plugins" $(pwd)/compose/plugins.env
+change_line "KONG_PLUGINS=.*" "KONG_PLUGINS=bundled, $plugins" $(pwd)/compose/plugins.env
 
 cd compose && docker-compose up $@
