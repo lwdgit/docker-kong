@@ -4,6 +4,8 @@ LABEL maintainer="Kong Core Team <team-core@konghq.com>"
 ENV KONG_VERSION 1.0.0
 ENV KONG_SHA256 79001d96c28d774bcf868f281e8e3486c4027ed35d69da6560172a742240b862
 
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.ustc.edu.cn/g' /etc/apk/repositories
+
 RUN adduser -Su 1337 kong \
 	&& mkdir -p "/usr/local/kong" \
 	&& apk add --no-cache --virtual .build-deps wget tar ca-certificates \
@@ -28,4 +30,4 @@ STOPSIGNAL SIGTERM
 
 CMD ["kong", "docker-start"]
 
-RUN luarocks install luacrypto
+RUN luarocks install lua-resty-session

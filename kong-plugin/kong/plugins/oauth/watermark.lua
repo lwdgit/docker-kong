@@ -1,0 +1,7 @@
+local _M = {}
+
+function _M.make_mask(text)
+  return [[<script>!function(){var h="__wm"+parseInt(1e5*Math.random(),10);!function t(e){e=e||{};var n={container:document.documentElement,width:e.width||300,height:e.height||200,textAlign:e.textAlign||"center",textBaseline:e.textBaseline||"middle",font:e.font||"20px Microsoft Yahei",fillStyle:e.fillStyle||"rgba(184, 184, 184, 0.2)",content:e.content||"lwdggm@gmail.com",rotate:e.rotate||30},i=document.createElement("canvas");i.setAttribute("width",n.width+"px"),i.setAttribute("height",n.height+"px");var a=i.getContext("2d");a.textAlign=n.textAlign,a.textBaseline=n.textBaseline,a.font=n.font,a.fillStyle=n.fillStyle,a.translate(n.width/2,n.height/2),a.rotate(Math.PI/180*n.rotate),a.translate(-n.width/2,-n.height/2),a.fillText(n.content,n.width/2,n.height/2);var o=i.toDataURL(),r=document.querySelector("."+h),l=r||document.createElement("div"),c='  position: fixed;  top: 0;  left: 0;  width: 100%;  height: 100%;  z-index: 99999;  pointer-events: none;  background-repeat: repeat;  background-image: url("'+o+'");';l.setAttribute("style",c),l.className=h,r||n.container.appendChild(l);var d=window.MutationObserver||window.WebKitMutationObserver;if(d){var s=new d(function(){(r=document.querySelector("."+h))&&r.getAttribute("style")===c&&r.className===h||(s.disconnect(),s=null,t(JSON.parse(JSON.stringify(e))))});s.observe(n.container,{childList:!0}),s.observe(l,{attributes:!0,subtree:!0})}}({content:"]] .. text .. [["})}();</script>]]
+end
+
+return _M

@@ -1,8 +1,8 @@
-package = "external-oauth"
+package = "oauth"
 version = "1.1-5"
-local pluginName = package:match("^kong%-plugin%-(.+)$")  -- "external-oauth"
+local pluginName = package:match("^kong%-plugin%-(.+)$")  -- "oauth"
 source = {
-  url = "git://github.com/mogui/kong-external-oauth"
+  url = "git://github.com/lwdgit/kong-oauth"
 }
 description = {
   summary = "A Kong plugin, that let you use an external Oauth 2.0 provider to protect your API",

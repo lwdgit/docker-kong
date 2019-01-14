@@ -1,7 +1,8 @@
 #!/bin/sh
+export LUA_PATH="$LUA_PATH;/kong-plugin/?.lua;/kong-plugin/?/init.lua;;"
+
 set -e
 
-export LUA_PATH="$LUA_PATH;/kong-plugin/?.lua;/kong-plugin/?/init.lua;;"
 export KONG_NGINX_DAEMON=off
 
 has_transparent() {
