@@ -129,7 +129,7 @@ function plugin:body_filter(conf)
       ngx.arg[1] = ngx.arg[1] .. water_mark.make_mask(session.data.email)
     end
   else
-    ngx.ctx.buffer = (ngx.ctx.buffer or '') .. chunk
+    ngx.ctx.buffer = (ngx.ctx.buffer or '') .. ngx.arg[1]
     ngx.arg[1] = nil
   end
 end
