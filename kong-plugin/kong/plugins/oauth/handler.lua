@@ -116,11 +116,21 @@ function plugin:body_filter(conf)
   if not ngx.ctx.can_add_watermark then return end
 
   local eof = ngx.arg[2]
+  -- if eof then
+  --   local session = Session.open()
+  --   if session.data and session.data.email then
+  --     ngx.arg[1] = ngx.arg[1] .. water_mark.make_mask(session.data.email)
+  --   end
+  -- end
   if eof then
+    local body = (ngx.ctx.buffer or '')
     local session = Session.open()
     if session.data and session.data.email then
       ngx.arg[1] = ngx.arg[1] .. water_mark.make_mask(session.data.email)
     end
+  else
+    ngx.ctx.buffer = (ngx.ctx.buffer or '') .. chunk
+    ngx.arg[1] = nil
   end
 end
 
