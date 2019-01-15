@@ -107,8 +107,8 @@ function plugin:header_filter(conf)
   plugin.super.header_filter(self)
   if conf.use_watermark and is_html_body(ngx.header['content-type']) then
     ngx.ctx.can_add_watermark = 1
+    ngx.header['content-length'] = nil
   end
-  ngx.header['content-length'] = nil
 end
 
 function plugin:body_filter(conf)
